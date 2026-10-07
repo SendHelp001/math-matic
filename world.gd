@@ -1,6 +1,4 @@
 extends Node2D
-const ClassicWire = preload("res://wires/ClassicWire.gd")
-const Junction = preload("res://wires/Junction.gd")
 
 @onready var ground_layer: TileMapLayer = $GroundLayer
 @onready var core: Node2D = $Core

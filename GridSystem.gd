@@ -49,11 +49,8 @@ func add_building(building: Node2D, b_type: String):
 		for wx in range(wire_tiles):
 			for wy in range(wire_tiles):
 				var tile = wire_system.pos_to_wire_tile(top_left + Vector2(wx * 16 + 8, wy * 16 + 8))
-				if wire_system.wire_grid.has(tile):
-					if wire_system.wire_grid[tile].item != null and is_instance_valid(wire_system.wire_grid[tile].item.visual):
-						wire_system.recycle_item_visual(wire_system.wire_grid[tile].item.visual)
-					wire_system.wire_grid.erase(tile)
-					wire_system.notify_grid_changed(tile)
+				if wire_system.has_wire(tile):
+					wire_system.remove_wire(tile)
 		wire_system.queue_redraw()
 	update_astar()
 

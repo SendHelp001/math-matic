@@ -52,7 +52,7 @@ void FastWireSystem::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_item_visual", "val"), &FastWireSystem::get_item_visual);
 	ClassDB::bind_method(D_METHOD("recycle_item_visual", "vis"), &FastWireSystem::recycle_item_visual);
 	ClassDB::bind_method(D_METHOD("get_wire_item", "pos"), &FastWireSystem::get_wire_item);
-	
+	ClassDB::bind_method(D_METHOD("get_building_at", "pos"), &FastWireSystem::get_building_at);	
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "grid_system"), "set_grid_system", "get_grid_system");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "debug_mode"), "set_debug_mode", "get_debug_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "preview_points"), "set_preview_points", "get_preview_points");
