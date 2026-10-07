@@ -1,4 +1,5 @@
 #include "register_types.h"
+#include "fast_wire_system.h"
 
 #include <gdextension_interface.h>
 #include <godot_cpp/core/defs.hpp>
@@ -11,8 +12,7 @@ void initialize_mathmatic_module(ModuleInitializationLevel p_level) {
 		return;
 	}
 
-	// Register our classes here
-	// ClassDB::register_class<MyClass>();
+	ClassDB::register_class<FastWireSystem>();
 }
 
 void uninitialize_mathmatic_module(ModuleInitializationLevel p_level) {

@@ -29,9 +29,16 @@ func tick_buildings(current_tick: int):
 					
 			var valid_outputs = []
 			for t in output_tiles:
-				if wire_system.wire_grid.has(t):
-					var w = wire_system.wire_grid[t]
-					var next_t = t + (w.dirs[0] if w.get_type() == "junction" and w.dirs.size() > 0 else w.dir)
+				if wire_system.has_wire(t):
+					var type = wire_system.get_wire_type(t)
+					var mdir = Vector2i(1, 0)
+					if type == "junction":
+						var dirs = wire_system.get_junction_dirs(t)
+						if dirs.size() > 0: mdir = dirs[0]
+					else:
+						mdir = wire_system.get_wire_dir(t)
+						
+					var next_t = t + mdir
 					var points_into_me = false
 					var b = wire_system.get_building_at(next_t)
 					if b != null and b == child: points_into_me = true
@@ -46,20 +53,26 @@ func tick_buildings(current_tick: int):
 					var idx = (start_idx + i) % valid_outputs.size()
 					var t = valid_outputs[idx]
 					
-					var w = wire_system.wire_grid[t]
-					var mdir = w.dirs[0] if w.get_type() == "junction" and w.dirs.size() > 0 else w.dir
+					var type = wire_system.get_wire_type(t)
+					var mdir = Vector2i(1, 0)
+					if type == "junction":
+						var dirs = wire_system.get_junction_dirs(t)
+						if dirs.size() > 0: mdir = dirs[0]
+					else:
+						mdir = wire_system.get_wire_dir(t)
 					
-					var itm_check = { "value": 0, "progress": 0.0, "visual": null, "move_dir": mdir }
-					if w.accept_item(itm_check, mdir):
-						var val = 1
-						if child.has_method("get_output_value"): val = child.get_output_value()
+					var val = 1
+					if child.has_method("get_output_value"): val = child.get_output_value()
+					var container = wire_system.get_item_visual(val)
+					
+					var itm_check = { "value": val, "progress": 0.0, "visual": container, "move_dir": mdir }
+					if wire_system.accept_item(t, itm_check, mdir):
 						if child.has_method("consume_output"): child.consume_output()
 						
-						var container = wire_system.get_item_visual(val)
-						itm_check.value = val
-						itm_check.visual = container
-						
 						miner_round_robin[child] = (idx + 1) % valid_outputs.size()
+					else:
+						wire_system.recycle_item_visual(container)
+
 						
 						# Bouncy feedback for the building
 						if is_instance_valid(child):

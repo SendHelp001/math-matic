@@ -7,7 +7,6 @@ const Junction = preload("res://wires/Junction.gd")
 @onready var camera: Camera2D = $Camera2D
 
 const GridSystemScript = preload("res://GridSystem.gd")
-const WireSystemScript = preload("res://WireSystem.gd")
 
 var grid_system
 var wire_system
@@ -46,7 +45,7 @@ func _ready():
 	grid_system = GridSystemScript.new()
 	add_child(grid_system)
 	
-	wire_system = WireSystemScript.new()
+	wire_system = FastWireSystem.new()
 	wire_system.z_index = 10
 	add_child(wire_system)
 	
@@ -169,11 +168,15 @@ func _ready():
 func start_drawing_wire():
 	if current_state == State.DRAWING_WIRE:
 		current_state = State.IDLE
-		wire_system.preview_points.clear()
+		var pts = wire_system.preview_points
+		pts.clear()
+		wire_system.preview_points = pts
 		wire_system.queue_redraw()
 		return
 	current_state = State.DRAWING_WIRE
-	wire_system.preview_points.clear()
+	var pts = wire_system.preview_points
+	pts.clear()
+	wire_system.preview_points = pts
 	if mine_preview:
 		mine_preview.queue_free()
 		mine_preview = null
@@ -204,7 +207,9 @@ func start_placing_mine():
 		turret_preview.queue_free()
 		turret_preview = null
 		
-	wire_system.preview_points.clear()
+	var pts = wire_system.preview_points
+	pts.clear()
+	wire_system.preview_points = pts
 	wire_system.queue_redraw()
 
 func start_placing_adder():
@@ -227,7 +232,9 @@ func start_placing_adder():
 		turret_preview.queue_free()
 		turret_preview = null
 		
-	wire_system.preview_points.clear()
+	var pts = wire_system.preview_points
+	pts.clear()
+	wire_system.preview_points = pts
 	wire_system.queue_redraw()
 
 func start_placing_turret():
@@ -249,7 +256,9 @@ func start_placing_turret():
 		adder_preview.queue_free()
 		adder_preview = null
 		
-	wire_system.preview_points.clear()
+	var pts = wire_system.preview_points
+	pts.clear()
+	wire_system.preview_points = pts
 	wire_system.queue_redraw()
 
 func _unhandled_input(event: InputEvent):
@@ -277,16 +286,17 @@ func _unhandled_input(event: InputEvent):
 			var mouse_pos = get_global_mouse_position()
 			var tile_pos = wire_system.pos_to_wire_tile(mouse_pos)
 			
-			if wire_system.wire_grid.has(tile_pos):
-				var existing = wire_system.wire_grid[tile_pos]
-				if existing.get_type() == "wire":
-					var w_idx = wire_system.WIRE_DIRS.find(existing.dir)
+			if wire_system.has_wire(tile_pos):
+				var type = wire_system.get_wire_type(tile_pos)
+				if type == "wire":
+					var dirs = wire_system.get_wire_dirs_const()
+					var w_idx = dirs.find(wire_system.get_wire_dir(tile_pos))
 					if w_idx != -1:
 						if event.keycode == KEY_E:
 							w_idx = (w_idx + 1) % 8
 						else:
 							w_idx = (w_idx - 1 + 8) % 8
-						existing.dir = wire_system.WIRE_DIRS[w_idx]
+						wire_system.set_wire(tile_pos, dirs[w_idx])
 					wire_system.current_wire_dir_index = w_idx
 					wire_system.queue_redraw()
 			else:
@@ -299,23 +309,24 @@ func _unhandled_input(event: InputEvent):
 		if Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE) and camera:
 			camera.position -= event.relative / camera.zoom
 			
-		if current_state == State.DRAWING_WIRE and wire_system.preview_points.size() > 0:
+		var pts = wire_system.preview_points
+		if current_state == State.DRAWING_WIRE and pts.size() > 0:
 			var target_tile = wire_system.pos_to_wire_tile(get_global_mouse_position())
-			var last_tile = wire_system.preview_points[-1]
+			var last_tile = pts[-1]
 			
 			if last_tile != target_tile:
 				var t_pos = wire_system.wire_tile_to_pos(target_tile)
 				if t_pos.x < grid_system.limit_left or t_pos.y < grid_system.limit_top or t_pos.x > grid_system.limit_right or t_pos.y > grid_system.limit_bottom:
 					return
 					
-				var idx = wire_system.preview_points.find(target_tile)
+				var idx = pts.find(target_tile)
 				if idx != -1:
-					wire_system.preview_points.resize(idx + 1)
+					pts.resize(idx + 1)
 				else:
 					var current = last_tile
 					var steps = 0
 					while current != target_tile and steps < 50:
-						if wire_system.preview_points.size() > 100:
+						if pts.size() > 100:
 							break
 						steps += 1
 						if abs(target_tile.x - current.x) > 0 and abs(target_tile.y - current.y) > 0:
@@ -325,8 +336,9 @@ func _unhandled_input(event: InputEvent):
 							current.x += sign(target_tile.x - current.x)
 						else:
 							current.y += sign(target_tile.y - current.y)
-						if not wire_system.preview_points.has(current):
-							wire_system.preview_points.append(current)
+						if not pts.has(current):
+							pts.append(current)
+				wire_system.preview_points = pts
 				wire_system.queue_redraw()
 
 	if event is InputEventMouseButton:
@@ -352,11 +364,8 @@ func _unhandled_input(event: InputEvent):
 				grid_system.remove_building(grid_system.grid_data[cell_4x4].ref)
 				return
 				
-			if wire_system.wire_grid.has(tile_pos):
-				wire_system.wire_grid[tile_pos].on_remove()
-				wire_system.wire_grid.erase(tile_pos)
-				wire_system.notify_grid_changed(tile_pos)
-				wire_system.queue_redraw()
+			if wire_system.has_wire(tile_pos):
+				wire_system.remove_wire(tile_pos)
 				return
 
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
@@ -388,59 +397,46 @@ func _unhandled_input(event: InputEvent):
 			if current_state == State.IDLE:
 				start_drawing_wire()
 			if current_state == State.DRAWING_WIRE:
-				wire_system.preview_points.clear()
-				wire_system.preview_points.append(tile_pos)
+				wire_system.preview_points = [tile_pos]
 				wire_system.queue_redraw()
 
 		if event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
-			if current_state == State.DRAWING_WIRE and wire_system.preview_points.size() > 0:
-				for i in range(wire_system.preview_points.size()):
-					var p = wire_system.preview_points[i]
+			var pts = wire_system.preview_points
+			if current_state == State.DRAWING_WIRE and pts.size() > 0:
+				var dirs = wire_system.get_wire_dirs_const()
+				for i in range(pts.size()):
+					var p = pts[i]
 					var center = wire_system.wire_tile_to_pos(p)
 					var cell = grid_system.pos_to_cell(center)
 					
-					var dir = wire_system.WIRE_DIRS[wire_system.current_wire_dir_index]
-					if wire_system.preview_points.size() > 1:
-						if i < wire_system.preview_points.size() - 1:
-							dir = wire_system.preview_points[i+1] - p
+					var dir = dirs[wire_system.current_wire_dir_index]
+					if pts.size() > 1:
+						if i < pts.size() - 1:
+							dir = pts[i+1] - p
 						elif i > 0:
-							dir = p - wire_system.preview_points[i-1] 
+							dir = p - pts[i-1] 
 						
 					if grid_system.grid_data.has(cell) and grid_system.grid_data[cell].get("is_building", true):
 						continue 
 						
-					if not wire_system.wire_grid.has(p):
-						var cw = ClassicWire.new()
-						cw.init(p, wire_system)
-						cw.dir = dir
-						wire_system.wire_grid[p] = cw
-						wire_system.notify_grid_changed(p)
+					if not wire_system.has_wire(p):
+						wire_system.set_wire(p, dir)
 					else:
-						var existing = wire_system.wire_grid[p]
-						if existing.get_type() == "wire" and existing.dir != dir:
-							var is_middle = (i > 0 and i < wire_system.preview_points.size() - 1)
-							var next_t = p + existing.dir
-							var existing_connected = wire_system.wire_grid.has(next_t) or wire_system.get_building_at(next_t) != null
+						var type = wire_system.get_wire_type(p)
+						if type == "wire" and wire_system.get_wire_dir(p) != dir:
+							var existing_dir = wire_system.get_wire_dir(p)
+							var is_middle = (i > 0 and i < pts.size() - 1)
+							var next_t = p + existing_dir
+							var existing_connected = wire_system.has_wire(next_t) or wire_system.get_building_at(next_t) != null
 							
 							if is_middle or existing_connected:
-								var j = Junction.new()
-								j.init(p, wire_system)
-								j.dirs.append(existing.dir)
-								j.dirs.append(dir)
-								if existing.item != null:
-									j.items.append(existing.item)
-								wire_system.wire_grid[p] = j
-								wire_system.notify_grid_changed(p)
+								wire_system.set_junction(p, [existing_dir, dir])
 							else:
-								if existing.dir != dir:
-									existing.dir = dir
-									wire_system.notify_grid_changed(p)
-						elif existing.get_type() == "junction":
-							if not dir in existing.dirs:
-								existing.dirs.append(dir)
-								wire_system.notify_grid_changed(p)
+								wire_system.set_wire(p, dir)
+						elif type == "junction":
+							wire_system.add_junction_dir(p, dir)
 						
-				wire_system.preview_points.clear()
+				wire_system.preview_points = []
 				wire_system.queue_redraw()
 
 func _process(delta: float):
@@ -524,19 +520,21 @@ func _process(delta: float):
 			building_hover_highlight.global_position = hovered_building.global_position - Vector2(size/2, size/2)
 			building_hover_highlight.size = Vector2(size, size)
 			building_hover_highlight.visible = true
-		elif wire_system.wire_grid.has(tile_pos):
+		elif wire_system.has_wire(tile_pos):
 			wire_hover_highlight.global_position = snapped_pos - Vector2(8, 8)
 			wire_hover_highlight.visible = true
 		else:
 			cursor_highlight.global_position = snapped_pos
 			
-			if current_state == State.DRAWING_WIRE and wire_system.preview_points.size() > 1:
-				var last_dir = wire_system.preview_points[-1] - wire_system.preview_points[-2]
-				var w_idx = wire_system.WIRE_DIRS.find(last_dir)
+			var pts = wire_system.preview_points
+			if current_state == State.DRAWING_WIRE and pts.size() > 1:
+				var last_dir = pts[-1] - pts[-2]
+				var dirs = wire_system.get_wire_dirs_const()
+				var w_idx = dirs.find(last_dir)
 				if w_idx != -1:
 					wire_system.current_wire_dir_index = w_idx
 					
-			var current_dir_vec = wire_system.WIRE_DIRS[wire_system.current_wire_dir_index]
+			var current_dir_vec = wire_system.get_wire_dirs_const()[wire_system.current_wire_dir_index]
 			cursor_highlight.rotation = Vector2(current_dir_vec).angle()
 			cursor_highlight.visible = true
 
