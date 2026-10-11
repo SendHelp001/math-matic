@@ -36,3 +36,15 @@ func update_label():
 
 func get_currency_text() -> String:
 	return label.text
+
+
+func _on_add_currency_pressed() -> void:
+	var denomination: float = 1.0
+	var amount_to_add: int = 10
+	
+	if currency.has(denomination):
+		currency[denomination] += amount_to_add
+	else:
+		currency[denomination] = amount_to_add
+		
+	update_label()
